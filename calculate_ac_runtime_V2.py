@@ -1,10 +1,11 @@
 import pandas as pd
 from datetime import timedelta
 import os
+import re
 
 # Function to list available directories in the current working directory, excluding hidden ones
 def list_available_directories(path):
-    return [d for d in os.listdir(path) 
+    return [d for d in os.listdir(path)
             if os.path.isdir(os.path.join(path, d)) and not d.startswith('.')]
 
 # Function to prompt user for a directory selection
@@ -13,7 +14,23 @@ def prompt_user_selection(options, prompt_message):
     for idx, option in enumerate(options):
         print(f"{idx}: {option}")
     selected_index = int(input("Enter the index of the selected option: "))
+    print()
     return options[selected_index]
+
+# Function to check if a directory is for a single day or a period
+def determine_directory_type(directory_name):
+    if re.match(r'^\d{6}$', directory_name):
+        return 'single_day'
+    elif re.match(r'^\d{6}-\d{6}$', directory_name):
+        return 'period'
+    else:
+        raise ValueError("Directory name does not match expected formats")
+
+# Function to format time as HH:MM
+def format_time(duration):
+    hours, remainder = divmod(duration.total_seconds(), 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{int(hours):02}:{int(minutes):02}"
 
 # Current working directory
 base_directory = os.getcwd()
@@ -23,6 +40,9 @@ available_directories = list_available_directories(base_directory)
 
 # Prompt user for directory selection
 selected_directory = prompt_user_selection(available_directories, "Select the directory for the data:")
+
+# Determine if the selected directory is a single day or a period
+directory_type = determine_directory_type(selected_directory)
 
 # Define file paths for both CSV files in the selected directory
 directory_path = os.path.join(base_directory, selected_directory)
@@ -94,37 +114,39 @@ for room, file_path in file_paths.items():
     # Store the time period covered by the data
     time_period[room] = (df['Timestamp'].min().date(), df['Timestamp'].max().date())
 
-# Calculate and print results for each room
+# Calculate totals and averages
+total_ac_running_time = sum(ac_running_time.values(), timedelta(0))
+total_ac_running_hours = sum(ac_running_hours.values())
+total_kwh_consumed = total_ac_running_hours * power_consumption_rate
+
+# Print results for each room
+print(f"{'Room':<12} {'Time Running':<18} {'Energy Consumed':<22}")
+print(f"{'----':<12} {'----------------':<18} {'-------------------':<22}")
 for room in ac_running_hours:
-    total_kwh_consumed = ac_running_hours[room] * power_consumption_rate
+    formatted_running_time = format_time(ac_running_time[room])
+    total_kwh = ac_running_hours[room] * power_consumption_rate
+    print(f"{room:<12} {formatted_running_time:<18} {total_kwh:.2f} kWh")
 
-    # Format total running time as hours and minutes
-    hours, remainder = divmod(ac_running_time[room].total_seconds(), 3600)
-    minutes, _ = divmod(remainder, 60)
-    formatted_running_time = f"{int(hours):02}:{int(minutes):02}"
+# Print the summary row
+print(f"{'----':<12} {'----------------':<18} {'-------------------':<22}")
+print(f"{'Total':<12} {format_time(total_ac_running_time):<18} {total_kwh_consumed:.2f} kWh")
 
-    # Format time period
-    start_date, end_date = time_period[room]
-    period_formatted = f"{start_date} to {end_date}"
-
-    print(f"Total time AC was running in {room}: {formatted_running_time}")
-    print(f"Total energy consumed by AC in {room}: {total_kwh_consumed:.2f} kWh")
-    print(f"Time period covered by {room} data: {period_formatted}\n")
-
-# Calculate and print results for both rooms combined
-total_running_hours_combined = sum(ac_running_hours.values())
-total_kwh_consumed_combined = total_running_hours_combined * power_consumption_rate
-
-# Format total running time for both rooms combined
-total_hours, remainder = divmod(total_running_hours_combined * 3600, 3600)
-total_minutes, _ = divmod(remainder, 60)
-formatted_total_running_time = f"{int(total_hours):02}:{int(total_minutes):02}"
-
-# Determine the overall time period covered by both rooms
-overall_start_date = min(time_period['Wohnzimmer'][0], time_period['Schlafzimmer'][0])
-overall_end_date = max(time_period['Wohnzimmer'][1], time_period['Schlafzimmer'][1])
-overall_period_formatted = f"{overall_start_date} to {overall_end_date}"
-
-print(f"Total time AC was running in both rooms: {formatted_total_running_time}")
-print(f"Total energy consumed by AC in both rooms: {total_kwh_consumed_combined:.2f} kWh")
-print(f"Time period covered by both rooms data: {overall_period_formatted}")
+# Print additional information based on the directory type
+if directory_type == 'single_day':
+    print(f"\nDate: {time_period['Wohnzimmer'][0]}")
+elif directory_type == 'period':
+    # Calculate the number of days in the period
+    num_days = (time_period['Wohnzimmer'][1] - time_period['Wohnzimmer'][0]).days + 1
+    
+    # Calculate average running time and consumption per day
+    avg_running_time_per_day = total_ac_running_time / num_days
+    avg_consumption_per_day = total_ac_running_hours / num_days
+    
+    # Format average running time
+    formatted_avg_running_time = format_time(avg_running_time_per_day)
+    
+    # Print results
+    print(f"{'Average/Day':<12} {formatted_avg_running_time:<18} {avg_consumption_per_day * power_consumption_rate:.2f} kWh")
+    
+    print(f"\nNumber of days in the period: {num_days}")
+    print(f"Time period covered by data: {time_period['Wohnzimmer'][0]} to {time_period['Wohnzimmer'][1]}")
