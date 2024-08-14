@@ -1,10 +1,34 @@
 import pandas as pd
 from datetime import timedelta
+import os
 
-# Define file paths for both CSV files
+# Function to list available directories in the current working directory, excluding hidden ones
+def list_available_directories(path):
+    return [d for d in os.listdir(path) 
+            if os.path.isdir(os.path.join(path, d)) and not d.startswith('.')]
+
+# Function to prompt user for a directory selection
+def prompt_user_selection(options, prompt_message):
+    print(prompt_message)
+    for idx, option in enumerate(options):
+        print(f"{idx}: {option}")
+    selected_index = int(input("Enter the index of the selected option: "))
+    return options[selected_index]
+
+# Current working directory
+base_directory = os.getcwd()
+
+# List available directories excluding hidden ones
+available_directories = list_available_directories(base_directory)
+
+# Prompt user for directory selection
+selected_directory = prompt_user_selection(available_directories, "Select the directory for the data:")
+
+# Define file paths for both CSV files in the selected directory
+directory_path = os.path.join(base_directory, selected_directory)
 file_paths = {
-    'Wohnzimmer': 'Wohnzimmer_data.csv',
-    'Schlafzimmer': 'Schlafzimmer_data.csv'
+    'Wohnzimmer': os.path.join(directory_path, 'Wohnzimmer_data.csv'),
+    'Schlafzimmer': os.path.join(directory_path, 'Schlafzimmer_data.csv')
 }
 
 # Initialize dictionaries to hold the total AC running time, hours, and time period for each room
